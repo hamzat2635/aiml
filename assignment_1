@@ -1,10 +1,23 @@
 #!/usr/bin/env python3
-# BFS vs DFS on a 10x20 maze — simplest clean version (no extra packages)
+# Assignment 1 showing BFS and DFS on 10x20 maze using JSON and Tk visual to show visual representation
 
 from collections import deque
+import json, time
 
-# ----------------- MAZE (0 = free, 1 = wall) -----------------
-maze = [
+# used deque (double ended queue) function. json to parse the embedded maze and time to measure algorithm runtime
+
+'''
+JSON format below describing the maze (0=free, 1=wall) as per the maze provided on the 
+assignment mentioning starting and goal points
+'''
+
+MAZE_JSON = r'''
+{
+  "rows": 10,
+  "cols": 20,
+  "start": [0, 1],
+  "goal": [9, 18],
+  "maze": [
     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0],
     [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0],
@@ -15,176 +28,182 @@ maze = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1]
-]
-START = (0, 1)     # (row, col)
-GOAL  = (9, 18)
+  ]
+}
+'''
 
-ROWS, COLS = len(maze), len(maze[0])
-DIRS = [(1,0), (-1,0), (0,1), (0,-1)]   # down, up, right, left
+# We're Parsing JSON into Python variables by extracting dimensions. Also assigning 
+# movement directions: up, down, rleft, right with no diagonals
 
-# ----------------- Small helpers -----------------
-def is_free(r, c):
-    return 0 <= r < ROWS and 0 <= c < COLS and maze[r][c] == 0
+data = json.loads(MAZE_JSON)
+ROWS, COLS = data["rows"], data["cols"]
+START, GOAL = tuple(data["start"]), tuple(data["goal"])
+maze = data["maze"]
 
+DIRS = [(1,0), (-1,0), (0,1), (0,-1)]  # down, up, right, left
+
+# Used helper functions below for grid search:
+
+def free(r, c): return 0 <= r < ROWS and 0 <= c < COLS and maze[r][c] == 0
 def neighbors(r, c):
     for dr, dc in DIRS:
-        nr, nc = r + dr, c + dc
-        if is_free(nr, nc):
+        nr, nc = r+dr, c+dc
+        if free(nr, nc):
             yield (nr, nc)
 
 def rebuild_path(parent, start, goal):
     if goal not in parent: return None
     path, cur = [], goal
     while cur is not None:
-        path.append(cur)
-        cur = parent[cur]
+        path.append(cur); cur = parent[cur]
     return list(reversed(path))
 
-# ----------------- BFS (shortest on unweighted grids) -----------------
+#BFS (Breadth First Search) explored grid layer by layer using First In First Out (FIFO) queue. It records to rebuild the path
+# BFS approach promises the shortest path. Use more memory.
+
 def bfs(start, goal):
-    q = deque([start])
-    parent = {start: None}
-    visited = 0
+    t0 = time.perf_counter()
+    q = deque([start]); parent = {start: None}; visited = 0
     while q:
-        u = q.popleft(); visited += 1
+        u = q.popleft(); visited += 1      # First In First Out
         if u == goal:
             p = rebuild_path(parent, start, goal)
-            return True, p, len(p) - 1, visited
+            return True, p, len(p)-1, visited, time.perf_counter()-t0
         for v in neighbors(*u):
             if v not in parent:
-                parent[v] = u
-                q.append(v)
-    return False, None, None, visited
+                parent[v] = u; q.append(v)
+    return False, None, None, visited, time.perf_counter()-t0
 
-# ----------------- DFS (not guaranteed shortest) -----------------
+# DFS (Depth First Search) explores by diving deep using a Last In First Out (LIFO). It records parents to rebuild the path.
+# DFS does not guarantee the shortest path, but can still find a valid one if it exists. Use less momory
+
 def dfs(start, goal):
-    stack = [start]
-    parent = {start: None}
-    visited = 0
-    while stack:
-        u = stack.pop(); visited += 1
+    t0 = time.perf_counter()
+    st = [start]; parent = {start: None}; visited = 0
+    while st:
+        u = st.pop(); visited += 1         #Last In First Out
         if u == goal:
             p = rebuild_path(parent, start, goal)
-            return True, p, len(p) - 1, visited
+            return True, p, len(p)-1, visited, time.perf_counter()-t0
         for v in neighbors(*u):
             if v not in parent:
-                parent[v] = u
-                stack.append(v)
-    return False, None, None, visited
+                parent[v] = u; st.append(v)
+    return False, None, None, visited, time.perf_counter()-t0
 
-# ----------------- ASCII map (easy to show in report) -----------------
+
+# ---- ASCII map for report ----
+# Renders the maze as text: S/G markers, '#' for walls, '*' along the given path, spaces elsewhere.
+
+
+
+
+
 def ascii_map(path=None):
-    path_set = set(path) if path else set()
+    ps = set(path) if path else set()
     lines = []
     for r in range(ROWS):
-        row_chars = []
+        row = []
         for c in range(COLS):
-            if (r, c) == START: row_chars.append("S")
-            elif (r, c) == GOAL: row_chars.append("G")
-            elif maze[r][c] == 1: row_chars.append("#")
-            elif (r, c) in path_set: row_chars.append("*")
-            else: row_chars.append(" ")
-        lines.append("".join(row_chars))
+            if   (r,c) == START: row.append("S")
+            elif (r,c) == GOAL:  row.append("G")
+            elif maze[r][c]==1:  row.append("#")
+            elif (r,c) in ps:    row.append("*")
+            else:                row.append(" ")
+        lines.append("".join(row))
     return "\n".join(lines)
 
-# ----------------- Tiny viewer (optional) -----------------
-SHOW_GUI = True  # set False for console-only demo
-
-def show_viewer(bfs_path, dfs_path, bfs_len, dfs_len, bfs_vis, dfs_vis):
+# ---- Tiny Tk viewer (stats in title; clean maze) ----
+try:
     import tkinter as tk
+    TK_AVAILABLE = True
+except Exception:
+    TK_AVAILABLE = False
+    tk = None
+
+if TK_AVAILABLE:
     CELL, PAD = 28, 24
+    def cell_center(r, c): return PAD + c*CELL + CELL//2, PAD + r*CELL + CELL//2
 
-    def center(rc):
-        r, c = rc
-        return PAD + c*CELL + CELL//2, PAD + r*CELL + CELL//2
+    class Viewer:
+        def __init__(self, bres, dres):
+            # bres/dres: dicts with keys {path, length, visited, time}
+            self.slides = [
+                ("Original Maze", None, None),
+                ("Maze with BFS Path", "#d22", bres),
+                ("Maze with DFS Path", "#26d", dres),
+            ]
+            self.slide = 0
+            W = PAD*2 + COLS*CELL
+            H = PAD*2 + ROWS*CELL
+            self.root = tk.Tk(); self.root.title("Maze Viewer")
+            self.cv = tk.Canvas(self.root, width=W, height=H, bg="white")
+            self.cv.grid(row=0, column=0, columnspan=3, padx=8, pady=8)
+            tk.Button(self.root, text="Previous", command=self.prev).grid(row=1, column=0, sticky="ew", padx=8, pady=6)
+            self.title_lbl = tk.Label(self.root, text="", font=("Arial", 12, "bold"))
+            self.title_lbl.grid(row=1, column=1)
+            tk.Button(self.root, text="Next", command=self.next).grid(row=1, column=2, sticky="ew", padx=8, pady=6)
+            self.root.bind("<Left>",  lambda e: self.prev())
+            self.root.bind("<Right>", lambda e: self.next())
+            self.redraw()
 
-    slides = [
-        ("Original Maze", None, None, None),
-        (f"Maze with BFS Path  (length={bfs_len}, visited={bfs_vis})", "#d22", bfs_path, None),
-        (f"Maze with DFS Path  (length={dfs_len}, visited={dfs_vis})", "#26d", dfs_path, None),
-    ]
-    slide = 0
+        def draw_grid(self):
+            for r in range(ROWS):
+                for c in range(COLS):
+                    x1 = PAD + c*CELL; y1 = PAD + r*CELL
+                    x2 = x1 + CELL;    y2 = y1 + CELL
+                    fill = "#222" if maze[r][c] == 1 else "#fff"
+                    self.cv.create_rectangle(x1, y1, x2, y2, fill=fill, outline="#bbb")
+            sx, sy = cell_center(*START); gx, gy = cell_center(*GOAL)
+            self.cv.create_oval(sx-8, sy-8, sx+8, sy+8, outline="red",  width=3)
+            self.cv.create_oval(gx-8, gy-8, gx+8, gy+8, outline="blue", width=3)
 
-    W = PAD*2 + COLS*CELL
-    H = PAD*2 + ROWS*CELL
+        def draw_path(self, path, color):
+            if not path: return
+            for i in range(len(path)-1):
+                x1, y1 = cell_center(*path[i])
+                x2, y2 = cell_center(*path[i+1])
+                self.cv.create_line(x1, y1, x2, y2, width=6, fill=color, capstyle="round")
 
-    root = tk.Tk(); root.title("Maze Viewer")
-    cv = tk.Canvas(root, width=W, height=H, bg="white")
-    cv.grid(row=0, column=0, columnspan=3, padx=8, pady=8)
+        def redraw(self):
+            self.cv.delete("all")
+            title, color, stats = self.slides[self.slide]
+            # Stats in the title bar
+            if stats:
+                ms = stats["time"] * 1000.0
+                title = f"{title}  (length={stats['length']}, visited={stats['visited']}, time={ms:.2f} ms)"
+            self.title_lbl.config(text=title)
+            self.draw_grid()
+            if color and stats:
+                self.draw_path(stats["path"], color)
 
-    title = tk.Label(root, font=("Arial", 12, "bold"))
-    title.grid(row=1, column=1)
-    tk.Button(root, text="Previous", command=lambda: switch(-1)).grid(row=1, column=0, sticky="ew", padx=8, pady=6)
-    tk.Button(root, text="Next",     command=lambda: switch(+1)).grid(row=1, column=2, sticky="ew", padx=8, pady=6)
-    root.bind("<Left>",  lambda e: switch(-1))
-    root.bind("<Right>", lambda e: switch(+1))
+        def prev(self): self.slide = (self.slide - 1) % len(self.slides); self.redraw()
+        def next(self): self.slide = (self.slide + 1) % len(self.slides); self.redraw()
+        def show(self): self.root.mainloop()
 
-    def draw_grid():
-        cv.delete("all")
-        # draw cells
-        for r in range(ROWS):
-            for c in range(COLS):
-                x1 = PAD + c*CELL; y1 = PAD + r*CELL
-                x2 = x1 + CELL;    y2 = y1 + CELL
-                fill = "#222" if maze[r][c] else "#fff"
-                cv.create_rectangle(x1, y1, x2, y2, fill=fill, outline="#bbb")
-        # start / goal markers
-        sx, sy = center(START); gx, gy = center(GOAL)
-        cv.create_oval(sx-8, sy-8, sx+8, sy+8, outline="red",  width=3)
-        cv.create_oval(gx-8, gy-8, gx+8, gy+8, outline="blue", width=3)
-
-    def draw_path(path, color):
-        if not path: return
-        for i in range(len(path) - 1):
-            x1, y1 = center(path[i])
-            x2, y2 = center(path[i+1])
-            cv.create_line(x1, y1, x2, y2, width=6, fill=color, capstyle="round")
-
-    def refresh():
-        title.config(text=slides[slide][0])
-        draw_grid()
-        color = slides[slide][1]
-        path  = slides[slide][2]
-        if color and path:
-            draw_path(path, color)
-
-    def switch(delta):
-        nonlocal slide
-        slide = (slide + delta) % len(slides)
-        refresh()
-
-    refresh()
-    root.mainloop()
-
-# ----------------- main -----------------
+# ---- main ----
 if __name__ == "__main__":
-    assert maze[START[0]][START[1]] == 0 and maze[GOAL[0]][GOAL[1]] == 0
+    assert free(*START) and free(*GOAL)
 
-    # Run searches
-    bf_found, bf_path, bf_len, bf_vis = bfs(START, GOAL)
-    df_found, df_path, df_len, df_vis = dfs(START, GOAL)
+    bf_ok, bf_path, bf_len, bf_vis, bf_time = bfs(START, GOAL)
+    df_ok, df_path, df_len, df_vis, df_time = dfs(START, GOAL)
 
-    # Print results
-    print("=== BFS ===")
-    print("Found:", bf_found)
-    if bf_found: print("Path length:", bf_len, "Visited:", bf_vis)
-
-    print("\n=== DFS ===")
-    print("Found:", df_found)
-    if df_found: print("Path length:", df_len, "Visited:", df_vis)
-
-    if bf_found and df_found:
+    print("=== BFS ==="); print("Found:", bf_ok)
+    if bf_ok: print("Path length:", bf_len, "Visited:", bf_vis, "Time:", f"{bf_time:.6f}s")
+    print("\n=== DFS ==="); print("Found:", df_ok)
+    if df_ok: print("Path length:", df_len, "Visited:", df_vis, "Time:", f"{df_time:.6f}s")
+    if bf_ok and df_ok:
         print("\nDFS optimal? ", df_len == bf_len, "(BFS is shortest on unweighted grids)")
 
-    # ASCII maps for the report
-    print("\nBFS ASCII map:")
-    print(ascii_map(bf_path if bf_found else None))
-    print("\nDFS ASCII map:")
-    print(ascii_map(df_path if df_found else None))
+    print("\nBFS ASCII map:"); print(ascii_map(bf_path if bf_ok else None))
+    print("\nDFS ASCII map:"); print(ascii_map(df_path if df_ok else None))
 
-    # Optional slides (Original / BFS / DFS)
-    if SHOW_GUI and bf_found and df_found:
+    # Visual (if Tk is available)
+    if TK_AVAILABLE and (bf_ok or df_ok):
+        bres = {"path": bf_path, "length": bf_len, "visited": bf_vis, "time": bf_time} if bf_ok else None
+        dres = {"path": df_path, "length": df_len, "visited": df_vis, "time": df_time} if df_ok else None
         try:
-            show_viewer(bf_path, df_path, bf_len, df_len, bf_vis, df_vis)
+            Viewer(bres, dres).show()
         except Exception:
             print("\n[Info] GUI not available, skipping viewer.")
+    elif not TK_AVAILABLE:
+        print("\n[Info] Tkinter not available, showing console output only.")
